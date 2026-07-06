@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 120" width="900" height="120">
+  <defs>
+    <linearGradient id="titlegrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   style="stop-color:#38bdf8"/>
+      <stop offset="30%"  style="stop-color:#2563eb"/>
+      <stop offset="60%"  style="stop-color:#ef4444"/>
+      <stop offset="80%"  style="stop-color:#f97316"/>
+      <stop offset="100%" style="stop-color:#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="subgrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   style="stop-color:#22d3ee"/>
+      <stop offset="50%"  style="stop-color:#a78bfa"/>
+      <stop offset="100%" style="stop-color:#22d3ee"/>
+    </linearGradient>
+    <filter id="titleglow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="subglow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="900" height="120" fill="#0a0f1e"/>
+
+  <!-- Scanning line animation -->
+  <rect x="0" y="0" width="900" height="2" fill="url(#titlegrad)" opacity="0.6">
+    <animate attributeName="opacity" values="0.3;0.9;0.3" dur="2.5s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- Main Title -->
+  <text x="450" y="62"
+        font-family="'Segoe UI', Arial, sans-serif"
+        font-size="62"
+        font-weight="900"
+        text-anchor="middle"
+        fill="url(#titlegrad)"
+        filter="url(#titleglow)"
+        letter-spacing="6">
+    ClimaX
+    <animate attributeName="opacity" values="0;0;1" dur="1.5s" fill="freeze"/>
+  </text>
+
+  <!-- Subtitle -->
+  <text x="450" y="88"
+        font-family="'Segoe UI', Arial, sans-serif"
+        font-size="13"
+        font-weight="500"
+        text-anchor="middle"
+        fill="url(#subgrad)"
+        filter="url(#subglow)"
+        letter-spacing="5">
+    AI · DISASTER PREDICTION · CLIMATE RESILIENCE
+    <animate attributeName="opacity" values="0;0;0;1" dur="2.2s" fill="freeze"/>
+  </text>
+
+  <!-- Decorative bottom line -->
+  <rect x="0" y="118" width="900" height="2" fill="url(#titlegrad)" opacity="0.6">
+    <animate attributeName="opacity" values="0.6;0.2;0.6" dur="2.5s" repeatCount="indefinite"/>
+  </rect>
+</svg>

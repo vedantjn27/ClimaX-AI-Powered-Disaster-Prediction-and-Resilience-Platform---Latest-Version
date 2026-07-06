@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 90" width="900" height="90">
+  <defs>
+    <linearGradient id="taggrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   style="stop-color:#38bdf8"/>
+      <stop offset="40%"  style="stop-color:#a78bfa"/>
+      <stop offset="70%"  style="stop-color:#f97316"/>
+      <stop offset="100%" style="stop-color:#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="linegrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   style="stop-color:#38bdf8;stop-opacity:0"/>
+      <stop offset="30%"  style="stop-color:#2563eb;stop-opacity:1"/>
+      <stop offset="70%"  style="stop-color:#ef4444;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#38bdf8;stop-opacity:0"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="900" height="90" fill="#0a0f1e" rx="12"/>
+
+  <!-- Top pulsing line -->
+  <rect x="0" y="0" width="900" height="2" fill="url(#linegrad)">
+    <animate attributeName="opacity" values="0.5;1;0.5" dur="2.5s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- Climate icon -->
+  <text x="450" y="36" font-size="22" text-anchor="middle" filter="url(#glow)">🌍</text>
+
+  <!-- Tagline -->
+  <text x="450" y="62"
+        font-family="'Segoe UI', Arial, sans-serif"
+        font-size="17"
+        font-weight="700"
+        text-anchor="middle"
+        fill="url(#taggrad)"
+        filter="url(#glow)"
+        letter-spacing="2">
+    Predict the Storm. Build the Shelter. Save Lives.
+    <animate attributeName="opacity" values="0.6;1;0.6" dur="3s" repeatCount="indefinite"/>
+  </text>
+
+  <!-- Sub text -->
+  <text x="450" y="80"
+        font-family="'Segoe UI', Arial, sans-serif"
+        font-size="10"
+        text-anchor="middle"
+        fill="#475569"
+        letter-spacing="2">
+    ClimaX · AI-Powered Disaster Prediction &amp; Climate Resilience Platform
+  </text>
+
+  <!-- Bottom pulsing line -->
+  <rect x="0" y="88" width="900" height="2" fill="url(#linegrad)">
+    <animate attributeName="opacity" values="1;0.4;1" dur="2.5s" repeatCount="indefinite"/>
+  </rect>
+</svg>
