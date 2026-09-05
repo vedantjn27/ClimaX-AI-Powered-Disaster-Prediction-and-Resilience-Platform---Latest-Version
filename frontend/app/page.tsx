@@ -13,6 +13,7 @@ import {
   Thermometer,
   Wind,
   Droplets,
+  Home,
   Sun,
   Moon,
 } from "lucide-react"
@@ -314,13 +315,29 @@ export default function Dashboard() {
 
         {/* ═══ FOOTER ═══ */}
         <footer className="py-8 px-6 border-t border-white/10 text-center">
-          <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <img src="/climax-logo.png" alt="ClimaX" className="w-8 h-8 rounded-lg" />
-              <span className="font-bold text-lg">ClimaX</span>
-              <span className="text-white/30 text-sm ml-2">v2.0</span>
+          <div className="max-w-5xl mx-auto space-y-6">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <img src="/climax-logo.png" alt="ClimaX" className="w-8 h-8 rounded-lg" />
+                <span className="font-bold text-lg">ClimaX</span>
+                <span className="text-white/30 text-sm ml-2">v2.0</span>
+              </div>
+              <p className="text-white/30 text-sm">Built with Next.js · FastAPI · Quantum Computing · Blockchain · Multi-Agent AI</p>
             </div>
-            <p className="text-white/30 text-sm">Built with Next.js · FastAPI · Quantum Computing · Blockchain · Multi-Agent AI</p>
+            <div className="pt-6 border-t border-white/10">
+              <p className="text-sm font-semibold text-white/70 mb-3">Support contacts</p>
+              <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-x-6 gap-y-2">
+                {["vedantjain273@gmail.com", "kashyapvib@gmail.com", "nischalamasri@gmail.com"].map((email) => (
+                  <a
+                    key={email}
+                    href={`mailto:${email}`}
+                    className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors underline-offset-4 hover:underline"
+                  >
+                    {email}
+                  </a>
+                ))}
+              </div>
+            </div>
           </div>
         </footer>
       </div>
@@ -348,6 +365,18 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowLanding(true)
+                  window.scrollTo({ top: 0, behavior: "smooth" })
+                }}
+                className={darkMode ? "bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700" : ""}
+              >
+                <Home className="h-4 w-4 mr-2" />
+                Home
+              </Button>
               <div className="flex items-center space-x-2">
                 <div className="flex space-x-1">
                   <div className={`w-2 h-2 rounded-full animate-pulse ${systemStatus.backend_connected ? "bg-green-500" : "bg-yellow-500"}`}></div>

@@ -368,7 +368,10 @@ export default function BlockchainDashboard({ backendConnected, backendUrl }: Bl
         })
         const data = await response.json()
         if (response.ok) {
-          setAlertSubmitStatus("✅ Alert submitted and verified on the blockchain!")
+          const emailStatus = data.email_notification?.sent
+            ? " Email notification sent."
+            : " Email notification was not sent."
+          setAlertSubmitStatus(`✅ Alert submitted and verified on the blockchain!${emailStatus}`)
           setAlertForm({ organization_name: "", alert_message: "", alert_type: "", affected_area: "", timestamp: "", signature: "" })
           fetchActiveAlerts() // Refresh active alerts
         } else {
