@@ -83,14 +83,17 @@ WAQI_API_KEY=your_waqi_api_key_here
 
 # ─── AI / LLM ───────────────────────────────────────────────
 GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=openai/gpt-oss-120b
+GROQ_FALLBACK_MODEL=openai/gpt-oss-20b
 
-# ─── TWILIO (for SMS alerts) ────────────────────────────────
-TWILIO_PHONE_NUMBER=your_twilio_phone_number
-TWILIO_ACCOUNT_SID=your_twilio_account_sid
-TWILIO_AUTH_TOKEN=your_twilio_auth_token
-
-# ─── TARGET (receiver for test SMS) ─────────────────────────
-TARGET_PHONE_NUMBER=your_verified_target_number
+# ─── SMTP EMAIL NOTIFICATIONS (Gmail defaults) ──────────────
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURITY=starttls
+SMTP_USERNAME=your_email@gmail.com
+SMTP_PASSWORD=your_gmail_app_password
+SMTP_FROM_EMAIL=your_email@gmail.com
+ALERT_EMAIL_TO=your_notification_email@example.com
 ```
 
 See [Section 7](#7-api-keys--where-to-get-them) for how to obtain each key.
@@ -127,7 +130,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-This installs: FastAPI, Uvicorn, Pydantic, NumPy, Pandas, OpenAI client, Transformers, Twilio, Cryptography, Plotly, pyttsx3, SpeechRecognition, and all other backend packages.
+This installs: FastAPI, Uvicorn, Pydantic, NumPy, Pandas, OpenAI client, Transformers, Cryptography, Plotly, pyttsx3, SpeechRecognition, and all other backend packages. SMTP email uses Python's standard library.
 
 > **Note on PyAudio (Windows users):** If `pip install pyaudio` fails, install it manually:
 > ```bash
@@ -246,14 +249,25 @@ The frontend will show a green **"Backend Connected"** status indicator when it 
 1. Visit https://console.groq.com
 2. Sign up (free tier: ~14,000 requests/day)
 3. Navigate to **API Keys** → Create a new key
-4. ClimaX uses `llama-3.3-70b-versatile` — available on free tier
+4. ClimaX defaults to Groq's `openai/gpt-oss-120b` production model and automatically
+   retries model-availability failures with `openai/gpt-oss-20b`. You can override
+   either model using `GROQ_MODEL` and `GROQ_FALLBACK_MODEL`.
 
-### Twilio (Optional — for SMS alerts)
-1. Visit https://twilio.com
-2. Create a free account (includes trial credits)
-3. Get a Twilio phone number from the console
-4. Copy Account SID and Auth Token from the dashboard
-5. Add your personal phone number as a verified caller
+### SMTP Email (Optional — for alert notifications)
+For Gmail:
+1. Enable 2-Step Verification on the sending Google account.
+2. Create a Google App Password and store that 16-character value in `SMTP_PASSWORD`.
+3. Set `SMTP_USERNAME` and `SMTP_FROM_EMAIL` to the sending Gmail address.
+4. Set `ALERT_EMAIL_TO` to the inbox that should receive ClimaX alerts.
+5. Keep `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, and `SMTP_SECURITY=starttls`.
+
+Every successfully verified `POST /alerts/submit` request attempts to send an email
+to `ALERT_EMAIL_TO`. The alert remains stored if the mail provider is temporarily
+unavailable, and the API response includes `email_notification.sent`. To resend the
+latest stored alert manually, call `POST /test/send-alert-email`.
+
+For another email provider, use its SMTP hostname, port, security mode, username,
+and password. `SMTP_SECURITY` accepts `starttls`, `ssl`, or `none`.
 
 ---
 
@@ -405,6 +419,11 @@ pip install pyaudio
 ### Issue: `GROQ_API_KEY not configured`
 **Fix:** Ensure your `.env` file is in the same directory where you run `uvicorn`, or that the file exists at the project root. Double-check there are no trailing spaces in the key value.
 
+### Issue: Groq returns `model_not_found`
+**Fix:** Redeploy the latest backend. ClimaX uses current production models by default.
+If your deployment defines `GROQ_MODEL`, update it to `openai/gpt-oss-120b` (or remove
+the override), and set `GROQ_FALLBACK_MODEL=openai/gpt-oss-20b`.
+
 ### Issue: Frontend shows "Backend Disconnected"
 **Fix:** Ensure the backend is running on port 8000. Check for firewall rules blocking localhost connections. Verify the backend health endpoint: `curl http://localhost:8000/health`.
 
@@ -428,8 +447,11 @@ npm run build -- --no-lint
 ```
 Or fix the specific type error shown in the build output.
 
-### Issue: Twilio SMS not sending
-**Fix:** Ensure your `TARGET_PHONE_NUMBER` is added as a **Verified Caller ID** in the Twilio console (required for trial accounts).
+### Issue: SMTP email not sending
+**Fix:** Verify all SMTP environment variables on the deployed backend. For Gmail,
+use an App Password rather than your normal Google password and ensure 2-Step
+Verification is enabled. Then call `POST /test/send-alert-email` after at least one
+alert has been generated.
 
 ---
 

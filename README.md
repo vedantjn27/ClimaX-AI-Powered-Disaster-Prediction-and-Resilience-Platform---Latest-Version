@@ -193,7 +193,7 @@ Localized emergency contact directories and step-by-step disaster survival guide
 │ AI/LLM  │ │ Quantum  │ │ Blockchain │ │ Weather APIs  │
 │ IBM     │ │ QAOA     │ │ Hyperledger│ │ OpenWeatherMap│
 │ Granite │ │ Inspired │ │ (on-chain  │ │ WeatherNext   │
-│ RAG     │ │ NumPy Sim│ │  records)  │ │ WAQI · Twilio │
+│ RAG     │ │ NumPy Sim│ │  records)  │ │ WAQI · SMTP   │
 └─────────┘ └──────────┘ └────────────┘ └───────────────┘
 ```
 
@@ -224,7 +224,7 @@ Localized emergency contact directories and step-by-step disaster survival guide
 |-----------|---------|
 | **IBM Granite LLM** | Context-aware natural language generation |
 | **RAG (Retrieval-Augmented Generation)** | Grounding LLM responses in live policy/news data |
-| **Groq (LLaMA 3.3 70B)** | Fast inference backend for production LLM calls |
+| **Groq (GPT-OSS 120B/20B)** | Fast inference backend with configurable production-model fallback |
 | **Transformers (HuggingFace)** | Local model inference pipeline |
 
 ### Blockchain
@@ -241,7 +241,7 @@ Localized emergency contact directories and step-by-step disaster survival guide
 | **OpenWeatherMap API** | Real-time weather and air quality data |
 | **WeatherNext (Google)** | Extended forecast and anomaly signals |
 | **WAQI API** | Global air quality index |
-| **Twilio** | SMS alert delivery to registered citizens |
+| **SMTP email** | Automatic plain-text notifications for verified disaster alerts |
 
 ---
 
@@ -312,7 +312,7 @@ Response ratings ──► AI Aggregation ──► Evidence-Based Policy Drafts
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+ and npm/pnpm
-- API keys: OpenWeatherMap, WAQI, Groq (free tier), Twilio (optional)
+- API keys: OpenWeatherMap, WAQI, Groq (free tier); SMTP credentials are optional
 
 ### 1. Clone the repository
 ```bash

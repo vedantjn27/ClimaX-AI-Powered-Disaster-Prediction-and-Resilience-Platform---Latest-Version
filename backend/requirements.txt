@@ -35,7 +35,7 @@ sentence-transformers==3.2.1    # Sentence embeddings for RAG retrieval
 faiss-cpu==1.8.0                # Vector similarity search for RAG knowledge base
 
 # ─── COMMUNICATION & ALERTS ──────────────────────────────────────────────────
-twilio==9.3.5                   # SMS alert delivery via Twilio API
+# SMTP email delivery uses Python's standard library (no package required).
 
 # ─── CRYPTOGRAPHY & BLOCKCHAIN ───────────────────────────────────────────────
 cryptography==43.0.3            # RSA key generation, signing, and verification
