@@ -23,7 +23,11 @@ import asyncio
 import json
 import hashlib
 import time
+import smtplib
+import ssl
 from datetime import datetime
+from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
 import numpy as np
 from dataclasses import dataclass,asdict
 import logging
@@ -37,7 +41,6 @@ import csv
 from openai import OpenAI
 from transformers import pipeline
 import pandas as pd
-from twilio.rest import Client
 import random
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
@@ -74,10 +77,13 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 load_dotenv()
 
 # ==================== AI CLIENT CONFIG ====================
-# Using Groq (api.groq.com) — free tier LLaMA 3.3, ~14k req/day, millisecond latency
-GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-GROQ_MODEL = "llama-3.3-70b-versatile"  # Best free Groq model for reasoning
-GROQ_FAST_MODEL = "llama-3.1-8b-instant"  # For latency-sensitive endpoints
+# Keep model IDs configurable because hosted models are periodically retired.
+# These defaults are Groq production models and replace the Llama models retired
+# for free/developer-tier users on 2026-08-16.
+GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+GROQ_FALLBACK_MODEL = os.getenv("GROQ_FALLBACK_MODEL", "openai/gpt-oss-20b")
+GROQ_FAST_MODEL = os.getenv("GROQ_FAST_MODEL", GROQ_FALLBACK_MODEL)
 
 def make_ai_client(api_key: str = None) -> OpenAI:
     """Create a Groq-compatible OpenAI client. Falls back to env GROQ_API_KEY."""
@@ -85,6 +91,104 @@ def make_ai_client(api_key: str = None) -> OpenAI:
     if not key:
         raise ValueError("GROQ_API_KEY not configured. Get a free key at console.groq.com")
     return OpenAI(api_key=key, base_url=GROQ_BASE_URL)
+
+
+def _is_model_unavailable_error(error: Exception) -> bool:
+    """Return True only for errors that indicate a missing/inaccessible model."""
+    status_code = getattr(error, "status_code", None)
+    error_code = getattr(error, "code", None)
+    message = str(error).lower()
+    return (
+        error_code == "model_not_found"
+        or "model_not_found" in message
+        or (status_code == 404 and "model" in message)
+        or ("model" in message and "does not exist or you do not have access" in message)
+    )
+
+
+def create_ai_chat_completion(client: OpenAI, *, messages: list, model: str = None, **kwargs):
+    """Create a Groq chat completion, retrying once with the production fallback model."""
+    primary_model = model or GROQ_MODEL
+    candidate_models = list(dict.fromkeys([primary_model, GROQ_FALLBACK_MODEL]))
+
+    for index, candidate_model in enumerate(candidate_models):
+        try:
+            return client.chat.completions.create(
+                model=candidate_model,
+                messages=messages,
+                **kwargs,
+            )
+        except Exception as error:
+            has_fallback = index < len(candidate_models) - 1
+            if not has_fallback or not _is_model_unavailable_error(error):
+                raise
+            logger.warning(
+                "Groq model '%s' is unavailable; retrying with '%s'.",
+                candidate_model,
+                candidate_models[index + 1],
+            )
+
+
+def send_email_notification(subject: str, body: str) -> Dict[str, Any]:
+    """Send a plain-text notification using environment-configured SMTP."""
+    host = os.getenv("SMTP_HOST", "smtp.gmail.com").strip()
+    security = os.getenv("SMTP_SECURITY", "starttls").strip().lower()
+    username = os.getenv("SMTP_USERNAME", "").strip()
+    password = os.getenv("SMTP_PASSWORD", "")
+    from_email = os.getenv("SMTP_FROM_EMAIL", username).strip()
+    recipients = [
+        address.strip()
+        for address in os.getenv("ALERT_EMAIL_TO", "").split(",")
+        if address.strip()
+    ]
+
+    try:
+        port = int(os.getenv("SMTP_PORT", "587"))
+    except ValueError as error:
+        raise ValueError("SMTP_PORT must be a valid integer.") from error
+
+    missing = []
+    if not host:
+        missing.append("SMTP_HOST")
+    if not from_email:
+        missing.append("SMTP_FROM_EMAIL (or SMTP_USERNAME)")
+    if not recipients:
+        missing.append("ALERT_EMAIL_TO")
+    if bool(username) != bool(password):
+        missing.append("both SMTP_USERNAME and SMTP_PASSWORD")
+    if missing:
+        raise ValueError(f"Missing SMTP configuration: {', '.join(missing)}")
+    if security not in {"starttls", "ssl", "none"}:
+        raise ValueError("SMTP_SECURITY must be one of: starttls, ssl, none.")
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = from_email
+    message["To"] = ", ".join(recipients)
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid()
+    message.set_content(body)
+
+    if security == "ssl":
+        smtp_client = smtplib.SMTP_SSL(
+            host,
+            port,
+            timeout=20,
+            context=ssl.create_default_context(),
+        )
+    else:
+        smtp_client = smtplib.SMTP(host, port, timeout=20)
+
+    with smtp_client as server:
+        server.ehlo()
+        if security == "starttls":
+            server.starttls(context=ssl.create_default_context())
+            server.ehlo()
+        if username:
+            server.login(username, password)
+        server.send_message(message, to_addrs=recipients)
+
+    return {"message_id": message["Message-ID"], "to": recipients}
 
 # In-memory database to store citizens
 citizens_db: Dict[str, Dict] = {}
@@ -1533,8 +1637,8 @@ class DisasterResponseBot:
     def use_grok(self, prompt: str) -> str:
         """Use Grok for general questions"""
         try:
-            response = self.grok_client.chat.completions.create(
-                model=GROQ_MODEL,
+            response = create_ai_chat_completion(
+                self.grok_client,
                 messages=[{"role": "user", "content": prompt}]
             )
             return response.choices[0].message.content
@@ -1768,8 +1872,8 @@ class GrokDisasterResilienceAnalyzer:
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 self.executor, 
-                lambda: self.client.chat.completions.create(
-                    model=GROQ_MODEL,
+                lambda: create_ai_chat_completion(
+                    self.client,
                     messages=[{"role": "user", "content": prompt}]
                 )
             )
@@ -2143,8 +2247,8 @@ class ClimateAIAgent:
             User Query: {query}
             """
             
-            response = self.client.chat.completions.create(
-                model=GROQ_MODEL,
+            response = create_ai_chat_completion(
+                self.client,
                 messages=[{"role": "user", "content": context}]
             )
             return response.choices[0].message.content
@@ -2226,7 +2330,7 @@ def get_api_key():
 CURRENT_POLICIES = {
     "Flood": [
         "Evacuation drills every 6 months",
-        "Flood forecasting system via SMS alerts"
+        "Flood forecasting system with email alerts"
     ],
     "Earthquake": [
         "Building codes for seismic zones",
@@ -2254,7 +2358,7 @@ class PolicyRecommendationEngine:
     def generate_evidence_based_policies(self, disaster_patterns: List[Dict]) -> List[Dict]:
         policies = []
 
-        # Try using Groq AI (LLaMA 3.3) for intelligent analysis
+        # Try using the configured Groq production model for intelligent analysis
         if self.groq_api_key:
             try:
                 client = make_ai_client(self.groq_api_key)
@@ -2278,8 +2382,8 @@ Provide your response in this exact JSON format (no markdown, just JSON):
     "expected_impact": "expected percentage reduction in disaster impact with brief explanation"
 }}"""
                     
-                    response = client.chat.completions.create(
-                        model=GROQ_MODEL,
+                    response = create_ai_chat_completion(
+                        client,
                         messages=[{"role": "user", "content": prompt}]
                     )
                     
@@ -2839,8 +2943,8 @@ Respond in this exact JSON format (no markdown):
 
 Only include alerts that are genuinely warranted by the conditions. Include 1-3 alerts and 2-4 advisories."""
 
-        response = client.chat.completions.create(
-            model=GROQ_MODEL,
+        response = create_ai_chat_completion(
+            client,
             messages=[{"role": "user", "content": prompt}]
         )
 
@@ -2939,8 +3043,8 @@ Provide your response in this exact JSON format (no markdown, just JSON):
     }}
 }}"""
         
-        response = agent.client.chat.completions.create(
-            model=GROQ_MODEL,
+        response = create_ai_chat_completion(
+            agent.client,
             messages=[{"role": "user", "content": prompt}]
         )
         
@@ -3080,50 +3184,59 @@ async def get_regional_alerts(region: str, limit: int = 10):
         alerts_data.append(alert_dict)
     return alerts_data
 
-@app.post("/test/send-alert-sms")
-async def send_latest_alert_sms():
-    """Send the most recent generated alert as SMS via Twilio"""
+@app.post("/test/send-alert-email")
+@app.post("/test/send-alert-sms", include_in_schema=False)
+async def send_latest_alert_email():
+    """Send the most recent generated alert as a plain-text SMTP email."""
     try:
-        if not disaster_alerts:
+        if alerts_db:
+            latest_alert = alerts_db[-1]
+            region = latest_alert["affected_area"]
+            disaster_type = latest_alert["alert_type"]
+            alert_level = "verified"
+            description = latest_alert["alert_message"]
+            affected_area = latest_alert["affected_area"]
+            generated_at = latest_alert["timestamp"]
+        elif disaster_alerts:
+            latest_alert = disaster_alerts[-1]
+            region = latest_alert.region
+            disaster_type = getattr(latest_alert.disaster_type, "value", latest_alert.disaster_type)
+            alert_level = getattr(latest_alert.alert_level, "value", latest_alert.alert_level)
+            description = latest_alert.description
+            affected_area = latest_alert.affected_area
+            generated_at = latest_alert.timestamp
+        else:
             raise HTTPException(status_code=404, detail="No alerts available to send.")
 
-        # Get the latest alert
-        latest_alert = disaster_alerts[-1]
-
-        # Prepare the alert message
-        sms_message = (
-            f"🚨 Disaster Alert 🚨\n"
-            f"Region: {latest_alert.region}\n"
-            f"Type: {latest_alert.disaster_type}\n"
-            
-            f"Affected Area: {latest_alert.affected_area}\n"
-                    )
-
-        # Twilio client setup
-        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-        from_number = os.getenv("TWILIO_PHONE_NUMBER")
-        to_number = os.getenv("TARGET_PHONE_NUMBER")
-
-        if not all([account_sid, auth_token, from_number, to_number]):
-            raise HTTPException(status_code=500, detail="Twilio credentials not configured properly.")
-
-        client = Client(account_sid, auth_token)
-
-        # Send SMS
-        message = client.messages.create(
-            body=sms_message,
-            from_=from_number,
-            to=to_number
+        email_subject = f"ClimaX disaster alert: {disaster_type} in {region}"
+        email_body = (
+            "ClimaX Disaster Notification\n\n"
+            f"Region: {region}\n"
+            f"Type: {disaster_type}\n"
+            f"Alert level: {alert_level}\n"
+            f"Description: {description}\n"
+            f"Affected Area: {affected_area}\n"
+            f"Generated at: {generated_at}\n\n"
+            "Please follow official local-authority instructions before taking action."
         )
 
-        logger.info(f"SMS sent successfully. SID: {message.sid}")
+        delivery = await asyncio.to_thread(
+            send_email_notification,
+            email_subject,
+            email_body,
+        )
+        logger.info("Alert email sent successfully to %s", delivery["to"])
 
-        return {"success": True, "message_sid": message.sid, "to": to_number}
+        return {"success": True, **delivery}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to send SMS alert: {e}")
-        raise HTTPException(status_code=500, detail=f"SMS sending failed: {str(e)}")
+        logger.error("Failed to send alert email: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Email delivery failed. Check the server SMTP configuration.",
+        )
 
 @app.get("/knowledge/query")
 async def query_knowledge(query: str, disaster_type: Optional[str] = None):
@@ -3865,7 +3978,7 @@ def get_organization_public_key(organization_name: str):
 
 # 1️⃣ Submit a new alert (signed)
 @app.post("/alerts/submit")
-def submit_alert(alert: AlertSubmission):
+async def submit_alert(alert: AlertSubmission):
     org_name = alert.organization_name.lower()
     org = organizations_db.get(org_name)
     if not org:
@@ -3912,9 +4025,33 @@ def submit_alert(alert: AlertSubmission):
     }
     alerts_db.append(alert_data)
 
+    notification = {"sent": False, "reason": "SMTP is not configured"}
+    if os.getenv("ALERT_EMAIL_TO"):
+        subject = f"ClimaX verified alert: {alert.alert_type} in {alert.affected_area}"
+        body = (
+            "ClimaX Verified Disaster Notification\n\n"
+            f"Organization: {org_name}\n"
+            f"Type: {alert.alert_type}\n"
+            f"Affected area: {alert.affected_area}\n"
+            f"Message: {alert.alert_message}\n"
+            f"Timestamp: {alert.timestamp}\n\n"
+            "Please follow official local-authority instructions before taking action."
+        )
+        try:
+            delivery = await asyncio.to_thread(send_email_notification, subject, body)
+            notification = {"sent": True, **delivery}
+            logger.info("Verified-alert email sent successfully to %s", delivery["to"])
+        except Exception as error:
+            logger.error("Verified alert stored, but email delivery failed: %s", error)
+            notification = {
+                "sent": False,
+                "reason": "Email delivery failed; check the server SMTP configuration",
+            }
+
     return {
         "message": "Alert submitted and verified successfully",
-        "alert": alert_data
+        "alert": alert_data,
+        "email_notification": notification,
     }
 
 # 2️⃣ Get all active alerts
@@ -4144,7 +4281,7 @@ async def resilience_info():
 
 @app.post("/analyze", response_model=AnalysisResponse)
 async def analyze_location(request: LocationAnalysisRequest):
-    """Analyze disaster resilience for a given location using Groq AI (LLaMA 3.3)"""
+    """Analyze disaster resilience for a given location using the configured Groq model."""
     try:
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
